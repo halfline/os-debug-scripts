@@ -70,6 +70,23 @@ script_prolog+=$'}\n'
               printf("(and group) ");
             }
             printf("with signal %s (%d)\n", $signal_name, $signal);
+            @logged_signals[$target_pid, $signal] = 1;
+        }
+
+        tracepoint:signal:signal_deliver
+        {
+            $target_pid = pid;
+            $signal = args->sig;
+
+            if (@logged_signals[$target_pid, $signal] == 1) {
+                delete(@logged_signals[$target_pid, $signal]);
+            } else {
+                $target_command = @task_map[$target_pid];
+                $signal_name = @signal_map[$signal] != "" ? @signal_map[$signal] : str($signal);
+                printf("Kernel signaled task %s (%d) ", $target_command, $target_pid);
+                printf("with signal %s (%d)\n", $signal_name, $signal);
+                printf("%s\n", kstack());
+            }
         }
     END_OF_SCRIPT
 } | bpftrace - | tee "${outputs[@]}" > /dev/null
