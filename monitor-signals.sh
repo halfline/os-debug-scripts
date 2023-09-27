@@ -29,7 +29,7 @@ script_prolog+=$'}\n'
     echo "$script_prolog"
     cat << '    END_OF_SCRIPT'
         tracepoint:syscalls:sys_enter_clone,
-        tracepoint:syscalls:sys_enter_execve
+        tracepoint:syscalls:sys_exit_execve
         {
             @task_map[pid] = comm;
         }
