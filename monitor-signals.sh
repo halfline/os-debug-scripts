@@ -1,4 +1,24 @@
 #!/bin/bash
+#
+declare -a signals_to_watch
+declare -a pids_to_watch
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --signal)
+            signal_number=$(kill -l "$2")
+            [ $? -eq 0 ] && signals_to_watch+=("$signal_number")
+            shift ;;
+        --pid)
+            pids_to_watch+=("$2")
+            shift ;;
+        *)
+            echo "Unknown parameter passed: $1"
+            exit 1 ;;
+    esac
+    shift
+done
+
 signal_map=(0 $(kill -L | sed -e 's/[0-9]*) //g' -e 's/SIG//g'))
 
 outputs=("/dev/kmsg")
@@ -17,10 +37,31 @@ for i in "${!signal_map[@]}"; do
     script_prolog+="@signal_map[$i] = \"SIG${signal_map[$i]}\";"
     script_prolog+=$'\n';
 done
+
 for pid in "${!task_map[@]}"; do
     script_prolog+="@task_map[$pid] = \"$(echo -n ${task_map[$pid]} | sed -e 's@[\"\\]@\\&@g')\";"
     script_prolog+=$'\n';
 done
+
+if [ ${#signals_to_watch[@]} -ne 0 ]; then
+    for signal_number in "${signals_to_watch[@]}"; do
+        script_prolog+="@signals_to_watch[$signal_number] = 1;"
+        script_prolog+=$'\n';
+    done
+else
+    script_prolog+="@signals_to_watch[-1] = 1;"
+    script_prolog+=$'\n';
+fi
+
+if [ ${#pids_to_watch[@]} -ne 0 ]; then
+    for pid in "${pids_to_watch[@]}"; do
+        script_prolog+="@pids_to_watch[$pid] = 1;"
+        script_prolog+=$'\n';
+    done
+else
+    script_prolog+="@pids_to_watch[-1] = 1;"
+    script_prolog+=$'\n';
+fi
 script_prolog+=$'}\n'
 
 # There's a race here where new taskes may show up before the script starts... oh well
@@ -54,29 +95,28 @@ script_prolog+=$'}\n'
             $sender_pid = pid;
 
             $target_pid = (int32) args->pid;
-            if ($target_pid < 0)
-            {
-              $whole_group = 1;
-              $target_pid = -$target_pid;
-            }
-            else
-            {
-              $whole_group = 0;
+            if ($target_pid < 0) {
+                $whole_group = 1;
+                $target_pid = -$target_pid;
+            } else {
+                $whole_group = 0;
             }
             $signal = args->sig;
 
-            $sender_command = comm;
-            $target_command = @task_map[$target_pid];
-            $signal_name = @signal_map[$signal] != "" ? @signal_map[$signal] : str($signal);
+            if ((@pids_to_watch[-1] == 1 || @pids_to_watch[$target_pid] == 1) &&
+                (@signals_to_watch[-1] == 1 || @signals_to_watch[$signal] == 1)) {
+                $sender_command = comm;
+                $target_command = @task_map[$target_pid];
+                $signal_name = @signal_map[$signal] != "" ? @signal_map[$signal] : str($signal);
 
-            printf("Task %s (%d) signaled ", $sender_command, $sender_pid);
-            printf("task %s (%d) ", $target_command, $target_pid);
-            if ($whole_group)
-            {
-              printf("(and group) ");
+                printf("Task %s (%d) signaled ", $sender_command, $sender_pid);
+                printf("task %s (%d) ", $target_command, $target_pid);
+                if ($whole_group) {
+                    printf("(and group) ");
+                }
+                printf("with signal %s (%d)\n", $signal_name, $signal);
+                @logged_signals[$target_pid, $signal] = 1;
             }
-            printf("with signal %s (%d)\n", $signal_name, $signal);
-            @logged_signals[$target_pid, $signal] = 1;
         }
 
         tracepoint:signal:signal_generate
@@ -86,7 +126,8 @@ script_prolog+=$'}\n'
 
             if (@logged_signals[$target_pid, $signal] == 1) {
                 delete(@logged_signals[$target_pid, $signal]);
-            } else {
+            } else if ((@pids_to_watch[-1] == 1 || @pids_to_watch[$target_pid] == 1) &&
+                       (@signals_to_watch[-1] == 1 || @signals_to_watch[$signal] == 1)) {
                 $target_command = @task_map[$target_pid];
                 $signal_name = @signal_map[$signal] != "" ? @signal_map[$signal] : str($signal);
                 printf("Kernel signaled task %s (%d) ", $target_command, $target_pid);
