@@ -79,7 +79,7 @@ script_prolog+=$'}\n'
             @logged_signals[$target_pid, $signal] = 1;
         }
 
-        tracepoint:signal:signal_deliver
+        tracepoint:signal:signal_generate
         {
             $target_pid = pid;
             $signal = args->sig;
