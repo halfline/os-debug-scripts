@@ -1,5 +1,5 @@
 #!/bin/bash
-#
+
 declare -a signals_to_watch
 declare -a pids_to_watch
 
@@ -21,9 +21,34 @@ done
 
 signal_map=(0 $(kill -L | sed -e 's/[0-9]*) //g' -e 's/SIG//g'))
 
+animate_dots() {
+    echo -en "\e[s" > /dev/tty
+    while true
+    do
+        for byte in "." "\b \b"
+        do
+            for n in $(seq 1 3)
+            do
+                if read -t 0.1
+                then
+                    echo -e '\n'
+                    return
+                fi
+                echo -en "\e[u$byte\e[s" > /dev/tty
+                echo -en "\r" > /dev/tty
+                echo
+            done
+        done
+    done
+}
+echo -n "Loading, please wait"
+
 outputs=("/dev/kmsg")
 if [ -t 1 ]; then
    outputs+=("/dev/tty")
+
+   coproc LOADING_ANIMATION (animate_dots)
+   outputs+=("/proc/$$/fd/${LOADING_ANIMATION[1]}")
 fi
 
 declare -A task_map
@@ -62,6 +87,10 @@ else
     script_prolog+="@pids_to_watch[-1] = 1;"
     script_prolog+=$'\n';
 fi
+
+script_prolog+='printf("Monitoring signals.\n");'
+script_prolog+=$'\n'
+
 script_prolog+=$'}\n'
 
 # There's a race here where new taskes may show up before the script starts... oh well
@@ -136,4 +165,4 @@ script_prolog+=$'}\n'
             }
         }
     END_OF_SCRIPT
-} | bpftrace - | tee "${outputs[@]}" > /dev/null
+} | bpftrace - | tee -p "${outputs[@]}" > /dev/null
