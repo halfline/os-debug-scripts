@@ -31,6 +31,12 @@ script_prolog+=$'}\n'
         tracepoint:syscalls:sys_enter_clone,
         tracepoint:syscalls:sys_exit_execve
         {
+	    if (@pids_to_watch[-1] == 1 || @pids_to_watch[pid] == 1) {
+                if (@task_map[pid] != "" && @task_map[pid] != comm) {
+                    printf("Task %d changed names from %s to %s\n", pid, @task_map[pid], comm);
+                }
+	    }
+
             @task_map[pid] = comm;
         }
 
