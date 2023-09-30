@@ -165,4 +165,4 @@ script_prolog+=$'}\n'
             }
         }
     END_OF_SCRIPT
-} | bpftrace - | tee -p "${outputs[@]}" > /dev/null
+} | bpftrace - | strings | tee -p "${outputs[@]}" > /dev/null
