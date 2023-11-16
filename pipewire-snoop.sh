@@ -15,8 +15,9 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+outputs=()
 if [ -t 1 ]; then
-    outputs=("/dev/tty")
+    outputs+=("/dev/tty")
 fi
 
 watch_for_preroll() {
