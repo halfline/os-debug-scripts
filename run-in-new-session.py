@@ -113,7 +113,7 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
     try:
         (_, exit_code) = os.waitpid(pid, 0);
     except KeyboardInterrupt:
-        os.kill(pid, os.SIGINT)
+        os.kill(pid, signal.SIGTERM)
     except OSError as e:
         print(f"Could not wait for program to finish: {e}", file=old_tty_output)
 
