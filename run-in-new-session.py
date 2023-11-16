@@ -142,7 +142,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run a program in a PAM session with specific environment variables as a specified user.')
     parser.add_argument('--user', default='root', help='Username for which to run the program')
     parser.add_argument('--service', default='su-l', help='PAM service to use')
-    parser.add_argument('--session-type', default='x11', help='e.g., x11, wayland, or tty')
+    parser.add_argument('--session-type', default='tty', help='e.g., x11, wayland, or tty')
     parser.add_argument('--session-class', default='user', help='e.g., greeter or user')
     parser.add_argument('--session-desktop', help='desktop file id associated with session, e.g. gnome, gnome-classic, gnome-wayland')
     parser.add_argument('--vt', help='VT to run on')
