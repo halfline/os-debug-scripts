@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+import rpm
+import sys
+import os
+
+def rpm_callback(what, amount, total, userdata=None, *args):
+    """ Custom callback function for RPM transaction. """
+    print(f'{what} {amount} {total} {userdata}')
+    if what == rpm.RPMCALLBACK_INST_OPEN_FILE:
+        return os.open(userdata, os.O_RDONLY)
+    elif what == rpm.RPMCALLBACK_INST_CLOSE_FILE:
+        os.close(amount)
+
+def install_rpm(package_path):
+    ts = rpm.TransactionSet()
+
+    ts.setProbFilter(rpm.RPMPROB_FILTER_IGNOREOS | rpm.RPMPROB_FILTER_IGNOREARCH | rpm.RPMPROB_FILTER_FORCERELOCATE | rpm.RPMPROB_FILTER_OLDPACKAGE | rpm.RPMPROB_FILTER_REPLACENEWFILES | rpm.RPMPROB_FILTER_REPLACEPKG)
+
+    try:
+        fd = os.open(package_path, os.O_RDONLY)
+        headers = ts.hdrFromFdno(fd)
+        os.close(fd)
+    except Exception as e:
+        print(f"Error opening RPM file: {e}")
+        return
+
+    try:
+        ts.addInstall(headers, key=package_path)
+    except rpm.error as e:
+        print(f"Error setting up the transaction: {e}")
+        return
+
+    # Perform the transaction
+    try:
+        ts.check()
+        ts.order()
+        ts.run(rpm_callback, package_path)
+        print("Installation completed.")
+    except rpm.error as e:
+        print(f"Error during installation: {e}")
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: rpm-nodeps-force-install <rpm-file>")
+        sys.exit(1)
+
+    rpm_file_path = sys.argv[1]
+    install_rpm(rpm_file_path)
+
