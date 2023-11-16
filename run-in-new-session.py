@@ -47,6 +47,9 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
     if pam_handle.open_session() != pam.PAM_SUCCESS:
         raise Exception("Failed to open PAM session")
 
+    session_environment = os.environ.copy()
+    session_environment.update(pam_handle.getenvlist())
+
     os.dup2(old_tty_input.fileno(), 0)
 
     user_info = pwd.getpwnam(user)
@@ -102,7 +105,7 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
             print(f"Could not become user {user} (uid={uid}): {e}", file=old_tty_output)
 
         try:
-            os.execvp(arguments[0], arguments)
+            os.execvpe(arguments[0], arguments, session_environment)
         except OSError as e:
             print(f"Could not run program \"{' '.join(arguments)}\": {e}", file=old_tty_output)
         os._exit(1)
