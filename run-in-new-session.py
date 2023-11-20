@@ -35,8 +35,9 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
     for key, value in pam_environment.items():
         pam_handle.putenv(f'{key}={value}')
 
-    old_tty_input = os.fdopen(os.dup(0), 'r')
-    os.dup2(os.dup(tty_input.fileno()), 0)
+    if vt:
+        old_tty_input = os.fdopen(os.dup(0), 'r')
+        os.dup2(os.dup(tty_input.fileno()), 0)
 
     if not pam_handle.authenticate(user, '', service=service, call_end=False):
         raise Exception("Authentication failed")
@@ -50,7 +51,8 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
     session_environment = os.environ.copy()
     session_environment.update(pam_handle.getenvlist())
 
-    os.dup2(old_tty_input.fileno(), 0)
+    if vt:
+        os.dup2(old_tty_input.fileno(), 0)
 
     user_info = pwd.getpwnam(user)
     uid = user_info.pw_uid
@@ -58,15 +60,16 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
 
     old_tty_output = os.fdopen(os.dup(2), 'w')
 
-    console = open("/dev/tty0", 'w')
+    if vt:
+        console = open("/dev/tty0", 'w')
 
-    try:
-        old_vt = 0
-        if vt:
-            vt_state = fcntl.ioctl(console, VT_GETSTATE, struct.pack('HHH', 0, 0, 0))
-            old_vt, _, _ = struct.unpack('HHH', vt_state)
-    except OSError as e:
-        print(f"Could not read current VT: {e}", file=old_tty_output)
+        try:
+            old_vt = 0
+            if vt:
+                vt_state = fcntl.ioctl(console, VT_GETSTATE, struct.pack('HHH', 0, 0, 0))
+                old_vt, _, _ = struct.unpack('HHH', vt_state)
+        except OSError as e:
+            print(f"Could not read current VT: {e}", file=old_tty_output)
 
     pid = os.fork()
     if pid == 0:
@@ -75,20 +78,21 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
         except OSError as e:
             print(f"Could not create new pid session: {e}", file=old_tty_output)
 
-        try:
-            fcntl.ioctl(tty_output, TIOCSCTTY, 1)
-        except OSError as e:
-            print(f"Could not take control of tty: {e}", file=old_tty_output)
+        if vt:
+            try:
+                fcntl.ioctl(tty_output, TIOCSCTTY, 1)
+            except OSError as e:
+                print(f"Could not take control of tty: {e}", file=old_tty_output)
 
-        try:
-            fcntl.ioctl(console, VT_ACTIVATE, vt)
-        except OSError as e:
-            print(f"Could not change to VT {vt}: {e}", file=old_tty_output)
+            try:
+                fcntl.ioctl(console, VT_ACTIVATE, vt)
+            except OSError as e:
+                print(f"Could not change to VT {vt}: {e}", file=old_tty_output)
 
-        try:
-            fcntl.ioctl(console, VT_WAITACTIVE, vt)
-        except OSError as e:
-            print(f"Could not wait for VT {vt} to change: {e}", file=old_tty_output)
+            try:
+                fcntl.ioctl(console, VT_WAITACTIVE, vt)
+            except OSError as e:
+                print(f"Could not wait for VT {vt} to change: {e}", file=old_tty_output)
 
         try:
             os.dup2(tty_input.fileno(), 0)
@@ -118,7 +122,7 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
         print(f"Could not wait for program to finish: {e}", file=old_tty_output)
 
     try:
-        if old_vt:
+        if vt and old_vt:
             fcntl.ioctl(console, VT_ACTIVATE, old_vt)
             fcntl.ioctl(console, VT_WAITACTIVE, old_vt)
     except OSError as e:
@@ -129,7 +133,9 @@ def run_program_in_new_session(arguments, pam_environment, user, service, tty_in
     else:
         os.kill(os.getpid(), os.WTERMSIG(exit_code))
     old_tty_output.close()
-    console.close()
+
+    if vt:
+        console.close()
 
     if pam_handle.close_session() != pam.PAM_SUCCESS:
         raise Exception("Failed to close PAM session")
@@ -146,17 +152,24 @@ def main():
     parser.add_argument('--session-class', default='user', help='e.g., greeter or user')
     parser.add_argument('--session-desktop', help='desktop file id associated with session, e.g. gnome, gnome-classic, gnome-wayland')
     parser.add_argument('--vt', help='VT to run on')
+    parser.add_argument('--no-vt', action='store_true', help='Don\'t run on a VT')
 
     args, remaining_args = parser.parse_known_args()
 
     if not remaining_args:
         remaining_args = [ "bash", "-l" ]
 
-    if not args.vt:
+    if args.vt and args.no_vt:
+        print("--vt and --no-vt can't be specified at same time", file=sys.stderr)
+        return 1
+
+    if not args.vt and not args.no_vt:
         vt = find_free_vt()
         print(f'Using VT {vt}')
-    else:
+    elif args.vt:
         vt = int(args.vt)
+    else:
+        vt = None
 
     if is_running_in_logind_session():
         program = ['systemd-run',
@@ -171,16 +184,22 @@ def main():
         return
 
     try:
-        tty_path = f'/dev/tty{vt}'
+        if vt:
+            tty_path = f'/dev/tty{vt}'
+        else:
+            tty_path = '/dev/null'
+
         tty_input = open(tty_path, 'r')
         tty_output = open(tty_path, 'w')
 
         pam_environment = {}
-        pam_environment['XDG_SEAT'] = "seat0"
         pam_environment['XDG_SESSION_TYPE'] = args.session_type
         pam_environment['XDG_SESSION_CLASS'] = args.session_class
         pam_environment['XDG_SESSION_DESKTOP'] = args.session_desktop
-        pam_environment['XDG_VTNR'] = vt
+
+        if vt:
+            pam_environment['XDG_SEAT'] = "seat0"
+            pam_environment['XDG_VTNR'] = vt
 
         try:
             result = run_program_in_new_session(remaining_args, pam_environment, args.user, args.service, tty_input, tty_output, vt)
