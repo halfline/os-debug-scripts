@@ -13,7 +13,7 @@ def rpm_callback(what, amount, total, userdata=None, *args):
 
 def install_rpm(package_path):
     ts = rpm.TransactionSet()
-
+    ts.setVSFlags(rpm._RPMVSF_NOSIGNATURES | rpm._RPMVSF_NODIGESTS)
     ts.setProbFilter(rpm.RPMPROB_FILTER_IGNOREOS | rpm.RPMPROB_FILTER_IGNOREARCH | rpm.RPMPROB_FILTER_FORCERELOCATE | rpm.RPMPROB_FILTER_OLDPACKAGE | rpm.RPMPROB_FILTER_REPLACENEWFILES | rpm.RPMPROB_FILTER_REPLACEPKG)
 
     try:
