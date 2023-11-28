@@ -1,5 +1,7 @@
 #!/bin/bash
 
+shift
+
 coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager)
 
 while true
@@ -10,7 +12,6 @@ do
                 read -u "${IDLE_MONITOR[0]}"
         done
 
-        shift
         "$@"
 done
 
