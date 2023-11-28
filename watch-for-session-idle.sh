@@ -1,7 +1,5 @@
 #!/bin/bash
 
-shift
-
 coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager)
 
 while true
@@ -13,5 +11,10 @@ do
         done
 
         "$@"
+
+        until grep -q "0" <(busctl --user get-property org.gnome.SessionManager /org/gnome/SessionManager/Presence org.gnome.SessionManager.Presence status)
+        do
+                read -u "${IDLE_MONITOR[0]}"
+        done
 done
 
