@@ -1,7 +1,13 @@
 #!/bin/bash
 
-# Monitor all session manager bus traffic in another process running alongside this one
-coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager)
+MATCH_FILTER="\
+        type='signal',\
+        interface='org.gnome.SessionManager.Presence',\
+        path='/org/gnome/SessionManager/Presence'\
+"
+
+# Monitor session manager presence status changes announced over the bus in another process running alongside this one
+coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager --match "${MATCH_FILTER}" --json=short)
 
 while true
 do
