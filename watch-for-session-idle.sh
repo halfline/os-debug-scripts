@@ -14,28 +14,38 @@ declare -A STATUS=(
         ['idle']=3
 )
 
-# Monitor session manager presence status changes announced over the bus in another process running alongside this one
-coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager --match "${MATCH_FILTER}" --json=short)
+restart_monitor() {
+        # Kill the existing monitor process if it exists
+        if [ -n "${IDLE_MONITOR_PID}" ]; then
+                kill "${IDLE_MONITOR_PID}"
+                wait "${IDLE_MONITOR_PID}" 2>/dev/null
+        fi
 
-while true
-do
+        # Start or restart the monitor
+        coproc IDLE_MONITOR (busctl --user monitor org.gnome.SessionManager --match "${MATCH_FILTER}" --json=short)
+}
+
+while true; do
+        restart_monitor
+
         # Check if the user has gone idle
-        until grep -q "${STATUS['idle']}" <(busctl --user get-property org.gnome.SessionManager /org/gnome/SessionManager/Presence org.gnome.SessionManager.Presence status)
-        do
-                # If not, wait idly until the other process reports more bus traffic from the session manager
+        until grep -q "${STATUS['idle']}" <(busctl --user get-property org.gnome.SessionManager /org/gnome/SessionManager/Presence org.gnome.SessionManager.Presence status); do
                 read -u "${IDLE_MONITOR[0]}"
+                restart_monitor
         done
 
         # System is now idle, run command
         "$@"
 
+        restart_monitor
+
         # Command run, wait for the system to become active again
-        while grep -q "${STATUS['idle']}" <(busctl --user get-property org.gnome.SessionManager /org/gnome/SessionManager/Presence org.gnome.SessionManager.Presence status)
-        do
-                # If not active, wait idly until the other process reports more bus traffic from the session manager
+        while grep -q "${STATUS['idle']}" <(busctl --user get-property org.gnome.SessionManager /org/gnome/SessionManager/Presence org.gnome.SessionManager.Presence status); do
                 read -u "${IDLE_MONITOR[0]}"
+                restart_monitor
         done
 
-        # System is now active, loop and block until idle again
+        # Ensure monitor is killed at the end of the loop
+        kill "${IDLE_MONITOR_PID}"
+        wait "${IDLE_MONITOR_PID}" 2>/dev/null
 done
-
