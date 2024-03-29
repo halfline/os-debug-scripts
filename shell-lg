@@ -75,11 +75,13 @@ eval_javascript_in_looking_glass() {
 
     eval_javascript_in_gnome_shell "delete Main.lookingGlass._lastEncodedResult;" > /dev/null
 
-    echo ">>> $1"
+    if [ $MODE = tui ]; then
+	echo ">>> $1"
+    fi
     echo "${OUTPUT}"
 }
 
-ask_user_for_input() {
+draw_prompt_tui() {
     # Save cursor position
     tput sc
 
@@ -107,9 +109,35 @@ ask_user_for_input() {
     tput rc
 }
 
+draw_prompt_simple() {
+    read -p ">>> " -re input
+    if [ $? = 1 ]; then
+        exit
+    fi
+
+    [ $? != 0 ] && continue
+
+    if [ "$input" = "quit" -o "$input" = "q" -o "$input" = "exit" ]; then
+        exit
+    fi
+
+    # Save input to history
+    history -s "$input"
+}
+
+ask_user_for_input() {
+    if [ $MODE = tui ]; then
+	draw_prompt_tui
+    else
+	draw_prompt_simple
+    fi
+}
+
 quit_message() {
-    # Move to just below the prompt
-    tput cup $(($(tput lines) - PROMPT_LINES + 1)) 0
+    if [ $MODE = tui ]; then
+	# Move to just below the prompt
+	tput cup $(($(tput lines) - PROMPT_LINES + 1)) 0
+    fi
 
     echo -ne "Type quit to exit"
     ask_user_for_input
@@ -139,10 +167,21 @@ main_loop() {
 
 check_for_unsafe_mode
 
-trap 'quit_message' SIGINT
-trap restore_terminal EXIT
+if [ "$1" = "--notui" ]; then
+    export MODE=simple
+else
+    export MODE=tui
+fi
 
-init_terminal
-load_history
+trap 'quit_message' SIGINT
+
+if [ $MODE = tui ]; then
+    init_terminal
+    load_history
+fi
+
 main_loop
-restore_terminal
+
+if [ $MODE = tui ]; then
+    restore_terminal
+fi
