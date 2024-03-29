@@ -1,0 +1,107 @@
+#!/bin/bash
+
+PROMPT_LINES=1
+
+init_terminal() {
+    tput reset
+
+    # Hide cursor to avoid flickering
+    tput civis
+
+    # Save cursor position
+    tput sc
+
+    # Exclude prompt from scrollable area
+    tput csr 0 "$(($(tput lines) - PROMPT_LINES - 1))"
+}
+
+restore_terminal() {
+    tput reset
+}
+
+eval_javascript_in_gnome_shell() {
+    gdbus call --session                             \
+               --dest org.gnome.Shell                \
+               --object-path /org/gnome/Shell        \
+               --method org.gnome.Shell.Eval         \
+               "$1" | sed -e 's/(true, ."\?\([^"]*\)"\?.)/\1/'
+}
+
+eval_javascript_in_looking_glass() {
+    # encode the text so we can side-step complicated escaping rules
+    ENCODED_TEXT=$(echo -n "$1" | xxd -p)
+
+    eval_javascript_in_gnome_shell "
+        const GLib = imports.gi.GLib;
+        const lg = Main.lookingGlass;
+        const results = lg._resultsArea;
+        lg._lastEncodedResult = '';
+        lg._entry.text = '${ENCODED_TEXT}'.replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+        lg._entry.clutter_text.activate();
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 125, () => {
+            const index = results.get_n_children() - 1;
+            if (index < 0)
+                return;
+            const resultsActor = results.get_children()[index];
+            const output = \`\${resultsActor.get_children()[1].get_children()[0].text}\${resultsActor.get_children()[1].get_children()[1].get_children()[0].text}\`;
+            lg._lastEncodedResult = output.split('').map(char => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+        });
+    " > /dev/null
+
+    sleep .250
+
+    OUTPUT=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastEncodedResult;' | xxd -r -p)
+    echo ">>> $1"
+    echo "${OUTPUT}"
+}
+
+draw_prompt() {
+    # Save cursor position
+    tput sc
+
+    # Move to the bottom of the terminal
+    tput cup $(($(tput lines) - PROMPT_LINES)) 0
+
+    # clear any crud off the prompt line
+    tput el
+
+    tput cnorm
+    read -p ">>> " -re input
+    tput civis
+
+    [ $? != 0 ] && continue
+
+    if [ "$input" = "quit" -o "$input" = "q" -o "$input" = "exit" ]; then
+        exit
+    fi
+
+    # Save input to history
+    history -s "$input"
+}
+
+quit_message() {
+    # Move to just above the prompt
+    tput cup $(($(tput lines) - PROMPT_LINES - 1)) 0
+
+    echo -ne "Type quit to exit"
+    draw_prompt
+}
+
+main_loop() {
+    while true; do
+        draw_prompt
+
+        # Move cursor back to saved position before output
+        tput rc
+
+        eval_javascript_in_looking_glass "$input"
+    done
+}
+
+trap 'quit_message' SIGINT
+trap restore_terminal EXIT
+
+init_terminal
+main_loop
+restore_terminal
+
