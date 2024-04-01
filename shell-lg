@@ -1,6 +1,8 @@
 #!/bin/bash
 
-PROMPT_LINES=1
+PROMPT_LINES=2
+
+input_buffer=""
 
 init_terminal() {
     tput reset
@@ -20,42 +22,64 @@ restore_terminal() {
 }
 
 eval_javascript_in_gnome_shell() {
-    gdbus call --session                             \
-               --dest org.gnome.Shell                \
-               --object-path /org/gnome/Shell        \
-               --method org.gnome.Shell.Eval         \
-               "$1" | sed -e 's/(true, ."\?\([^"]*\)"\?.)/\1/'
+    json=$(mktemp)
+    busctl call --user --json=short               \
+                org.gnome.Shell                   \
+                /org/gnome/Shell                  \
+                org.gnome.Shell                   \
+                Eval "s" "$1" > "$json"
+    result=$(jq '.data[0]' < "$json")
+    output=$(jq '.data[1] | select(. != null and . != "") | try fromjson catch .' < "$json")
+    rm -f "$json"
+
+    if [ "$result" = "false" ]; then
+        echo -e "\e[31m${output:1:-1}\e[0m" > /dev/stderr
+        return 1
+    fi
+
+    echo "$output"
+    return 0
 }
 
 eval_javascript_in_looking_glass() {
     # encode the text so we can side-step complicated escaping rules
-    ENCODED_TEXT=$(echo -n "$1" | xxd -p)
+    ENCODED_TEXT=$(echo -n "$1" | xxd -p -c 9999999)
 
     eval_javascript_in_gnome_shell "
         const GLib = imports.gi.GLib;
-        const lg = Main.lookingGlass;
-        const results = lg._resultsArea;
-        lg._lastEncodedResult = '';
-        lg._entry.text = '${ENCODED_TEXT}'.replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-        lg._entry.clutter_text.activate();
+        const results = Main.lookingGlass._resultsArea;
+        Main.lookingGlass._entry.text = '${ENCODED_TEXT}'.replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+        Main.lookingGlass._entry.clutter_text.activate();
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 125, () => {
             const index = results.get_n_children() - 1;
             if (index < 0)
                 return;
             const resultsActor = results.get_children()[index];
             const output = \`\${resultsActor.get_children()[1].get_children()[0].text}\${resultsActor.get_children()[1].get_children()[1].get_children()[0].text}\`;
-            lg._lastEncodedResult = output.split('').map(char => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+            Main.lookingGlass._lastEncodedResult = output.split('').map(char => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
         });
     " > /dev/null
+
+    if [ $? -ne 0 ]; then
+        return
+    fi
 
     sleep .250
 
     OUTPUT=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastEncodedResult;' | xxd -r -p)
+
+    if [ -z "$OUTPUT" ]; then
+        echo -e "\e[31mCould not fetch result from call\e[0m" > /dev/stderr
+        return
+    fi
+
+    eval_javascript_in_gnome_shell "delete Main.lookingGlass._lastEncodedResult;" > /dev/null
+
     echo ">>> $1"
     echo "${OUTPUT}"
 }
 
-draw_prompt() {
+ask_user_for_input() {
     # Save cursor position
     tput sc
 
@@ -66,42 +90,59 @@ draw_prompt() {
     tput el
 
     tput cnorm
-    read -p ">>> " -re input
+    read -p ">>> " -re input_buffer
+    STATUS="$?"
     tput civis
 
-    [ $? != 0 ] && continue
+    [ $STATUS != 0 ] && exit
 
-    if [ "$input" = "quit" -o "$input" = "q" -o "$input" = "exit" ]; then
+    if [ "$input_buffer" = "quit" -o "$input_buffer" = "q" -o "$input_buffer" = "exit" ]; then
         exit
     fi
 
     # Save input to history
-    history -s "$input"
+    history -s "$input_buffer"
+
+    # Move cursor back to saved position before output
+    tput rc
 }
 
 quit_message() {
-    # Move to just above the prompt
-    tput cup $(($(tput lines) - PROMPT_LINES - 1)) 0
+    # Move to just below the prompt
+    tput cup $(($(tput lines) - PROMPT_LINES + 1)) 0
 
     echo -ne "Type quit to exit"
-    draw_prompt
+    ask_user_for_input
+}
+
+load_history() {
+    while IFS= read -r line; do
+        history -s "$line"
+    done < <(eval_javascript_in_gnome_shell 'Main.lookingGlass._history._history.join("\n");' | jq -r '. | select(. != null and . != "") | try fromjson catch .')
+}
+
+check_for_unsafe_mode() {
+    unsafe_mode=$(eval_javascript_in_gnome_shell 'global.context.unsafe_mode')
+
+    if [ "$unsafe_mode" != "true" ]; then
+        echo -e "Please enable unsafe-mode in the Flags tab of looking glass." > /dev/stderr
+        exit
+    fi
 }
 
 main_loop() {
     while true; do
-        draw_prompt
-
-        # Move cursor back to saved position before output
-        tput rc
-
-        eval_javascript_in_looking_glass "$input"
+        ask_user_for_input
+        eval_javascript_in_looking_glass "$input_buffer"
     done
 }
+
+check_for_unsafe_mode
 
 trap 'quit_message' SIGINT
 trap restore_terminal EXIT
 
 init_terminal
+load_history
 main_loop
 restore_terminal
-
