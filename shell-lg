@@ -47,6 +47,7 @@ eval_javascript_in_looking_glass() {
 
     eval_javascript_in_gnome_shell "
         const GLib = imports.gi.GLib;
+        Main.createLookingGlass();
         const results = Main.lookingGlass._resultsArea;
         Main.lookingGlass._entry.text = '${ENCODED_TEXT}'.replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
         Main.lookingGlass._entry.clutter_text.activate();
