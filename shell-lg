@@ -158,10 +158,20 @@ eval_autocomplete_javascript() {
 
         const command = `
             const JsParse = await import("resource:///org/gnome/shell/misc/jsParse.js");
+
+            function getGlobalState() {
+                const keywords = ["true", "false", "null", "new"];
+                const windowProperties = Object.getOwnPropertyNames(globalThis).filter(
+                    a => a.charAt(0) !== "_");
+                const headerProperties = JsParse.getDeclaredConstants(commandHeader);
+
+                return keywords.concat(windowProperties).concat(headerProperties);
+            }
+
             const commandHeader = '"'"'const {Clutter, Gio, GLib, GObject, Meta, Shell, St} = imports.gi; const Main = await import("resource:///org/gnome/shell/ui/main.js"); const inspect = Main.lookingGlass.inspect.bind(Main.lookingGlass); const it = Main.lookingGlass.getIt(); const r = Main.lookingGlass.getResult.bind(Main.lookingGlass);'"'"';
 
             const text="'${ENCODED_TEXT}'".replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
-            const completions = await JsParse.getCompletions(text, commandHeader, []);
+            const completions = await JsParse.getCompletions(text, commandHeader, getGlobalState());
             return {
                 "completions": completions[0],
                 "attrHead": completions[1]
