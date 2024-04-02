@@ -5,16 +5,26 @@ PROMPT_LINES=2
 input_buffer=""
 
 init_terminal() {
-    clear_screen
-
     # Hide cursor to avoid flickering
     tput civis
+
+    # Scroll enough for the prompt in case we're at the
+    # bottom of the screen
+    for i in $(seq 1 $PROMPT_LINES); do
+        echo
+    done
+
+    # Move cursor to the top of the room we just made
+    tput cuu $PROMPT_LINES
 
     # Save cursor position
     tput sc
 
     # Exclude prompt from scrollable area
     tput csr 0 "$(($(tput lines) - PROMPT_LINES - 1))"
+
+    # Changing scrollable area moves cursor, so put it back
+    tput rc
 }
 
 restore_terminal() {
@@ -23,19 +33,6 @@ restore_terminal() {
     tput csr 0 "$(tput lines)"
     tput rc
     tput cnorm
-}
-
-clear_screen() {
-    # Clears screen in a way that doesn't erase what's already there from scrollback buffer
-    rows=$(tput lines)
-
-    tput cup "$rows" 0
-
-    for ((i = 0; i < rows; i++)); do
-        echo
-    done
-
-    tput cup 0 0
 }
 
 eval_javascript_in_gnome_shell() {
