@@ -111,7 +111,7 @@ ask_user_for_input() {
     clear_prompt
 
     tput cnorm
-    read -p ">>> " -re input_buffer
+    read -i "$READLINE_LINE" -p ">>> " -re input_buffer
     STATUS="$?"
     tput civis
 
@@ -151,7 +151,50 @@ check_for_unsafe_mode() {
     fi
 }
 
+eval_autocomplete_javascript() {
+    ENCODED_TEXT=$(echo -n "$1" | xxd -p -c 9999999)
+    OUTPUT=$(eval_javascript_in_gnome_shell '
+        const AsyncFunction = async function () {}.constructor;
+
+        const command = `
+            const JsParse = await import("resource:///org/gnome/shell/misc/jsParse.js");
+            const commandHeader = '"'"'const {Clutter, Gio, GLib, GObject, Meta, Shell, St} = imports.gi; const Main = await import("resource:///org/gnome/shell/ui/main.js"); const inspect = Main.lookingGlass.inspect.bind(Main.lookingGlass); const it = Main.lookingGlass.getIt(); const r = Main.lookingGlass.getResult.bind(Main.lookingGlass);'"'"';
+
+            const text="'${ENCODED_TEXT}'".replace(/([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            const completions = await JsParse.getCompletions(text, commandHeader, []);
+            return {
+                "completions": completions[0],
+                "attrHead": completions[1]
+            };`;
+        AsyncFunction(command)();
+    ')
+    if [ $? = 1 ]; then
+        echo fail
+    fi
+    echo "$OUTPUT"
+}
+
+autocomplete() {
+    RESULT="$(eval_autocomplete_javascript "$READLINE_LINE")"
+    COMPLETIONS="$(echo "$RESULT" | jq '.completions[]' | sed 's/\"//g')"
+    ATTR_HEAD=$(echo "$RESULT" | jq '.attrHead' | sed 's/\"//g')
+    N_COMPLETIONS=$(echo "$COMPLETIONS" | wc -w)
+    if [ $N_COMPLETIONS = 0 ]; then
+        return
+    elif [ $N_COMPLETIONS = 1 ]; then
+        TO_ADD=$(echo $COMPLETIONS | sed s/$ATTR_HEAD//)
+        READLINE_LINE+="$TO_ADD"
+        (( READLINE_POINT += $(echo "$TO_ADD" | wc -c) ))
+    else
+        tput rc
+        echo
+        echo "$COMPLETIONS" | columns
+        ask_user_for_input
+    fi
+}
+
 main_loop() {
+    bind -x '"\t"':autocomplete 2> /dev/null
     while true; do
         ask_user_for_input
         eval_javascript_in_looking_glass "$input_buffer"
