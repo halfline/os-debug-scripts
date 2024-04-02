@@ -5,7 +5,7 @@ PROMPT_LINES=2
 input_buffer=""
 
 init_terminal() {
-    tput reset
+    clear_screen
 
     # Hide cursor to avoid flickering
     tput civis
@@ -18,7 +18,24 @@ init_terminal() {
 }
 
 restore_terminal() {
-    tput reset
+    clear_prompt
+
+    tput csr 0 "$(tput lines)"
+    tput rc
+    tput cnorm
+}
+
+clear_screen() {
+    # Clears screen in a way that doesn't erase what's already there from scrollback buffer
+    rows=$(tput lines)
+
+    tput cup "$rows" 0
+
+    for ((i = 0; i < rows; i++)); do
+        echo
+    done
+
+    tput cup 0 0
 }
 
 eval_javascript_in_gnome_shell() {
@@ -79,15 +96,21 @@ eval_javascript_in_looking_glass() {
     echo "${OUTPUT}"
 }
 
+jump_to_prompt() {
+    # Move to the bottom of the terminal
+    tput cup $(($(tput lines) - PROMPT_LINES)) 0
+}
+
+clear_prompt() {
+    jump_to_prompt
+    tput el
+}
+
 ask_user_for_input() {
     # Save cursor position
     tput sc
 
-    # Move to the bottom of the terminal
-    tput cup $(($(tput lines) - PROMPT_LINES)) 0
-
-    # clear any crud off the prompt line
-    tput el
+    clear_prompt
 
     tput cnorm
     read -p ">>> " -re input_buffer
