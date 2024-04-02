@@ -21,6 +21,20 @@ restore_terminal() {
     tput reset
 }
 
+eval_javascript_in_gnome_shell_gdbus() {
+    RET=$(gdbus call --session                       \
+               --dest org.gnome.Shell                \
+               --object-path /org/gnome/Shell        \
+               --method org.gnome.Shell.Eval         \
+	       "$1")
+    if [[ "$RET" =~ ^\(false,.* ]]; then
+        echo $RET > /dev/stderr
+        return 1
+    else
+        echo "$RET" | sed -e 's/(true, ."\?\([^"]*\)"\?.)/\1/'
+    fi
+}
+
 eval_javascript_in_gnome_shell() {
     json=$(mktemp)
     busctl call --user --json=short               \
@@ -159,7 +173,55 @@ check_for_unsafe_mode() {
     fi
 }
 
+eval_autocomplete_javascript() {
+    TEXT="$1"
+    OUTPUT=$(eval_javascript_in_gnome_shell_gdbus "
+        const AsyncFunction = async function () {}.constructor;
+
+        const command = \`
+            const JsParse = await import('resource:///org/gnome/shell/misc/jsParse.js');
+	    const commandHeader = \\\\\`
+		const {Clutter, Gio, GLib, GObject, Meta, Shell, St} = imports.gi;
+		const Main = await import('resource:///org/gnome/shell/ui/main.js');
+		const inspect = Main.lookingGlass.inspect.bind(Main.lookingGlass);
+		const it = Main.lookingGlass.getIt();
+		const r = Main.lookingGlass.getResult.bind(Main.lookingGlass);
+	    \\\\\`;
+
+	    const completions = await JsParse.getCompletions('$TEXT', commandHeader, []);
+	    return {
+	        'completions': completions[0],
+		'attrHead': completions[1]
+	    };\`;
+	AsyncFunction(command)();
+    ")
+    if [ $? = 1 ]; then
+	echo fail
+    fi
+    echo "$OUTPUT" | sed -e "s/(true, '\(.*\)')$/\1/"
+}
+
+
+autocomplete() {
+    RESULT="$(eval_autocomplete_javascript "$READLINE_LINE")"
+    COMPLETIONS="$(echo "$RESULT" | jq '.completions[]' | sed 's/\"//g')"
+    ATTR_HEAD=$(echo "$RESULT" | jq '.attrHead' | sed 's/\"//g')
+    N_COMPLETIONS=$(echo "$COMPLETIONS" | wc -w)
+    if [ $N_COMPLETIONS = 0 ]; then
+	return
+    elif [ $N_COMPLETIONS = 1 ]; then
+	TO_ADD=$(echo $COMPLETIONS | sed s/$ATTR_HEAD//)
+	READLINE_LINE+="$TO_ADD"
+	(( READLINE_POINT += $(echo "$TO_ADD" | wc -c) ))
+    else
+	echo "$COMPLETIONS" | columns
+    fi
+}
+
 main_loop() {
+    if [ -t 1 ] && [ $MODE = simple ]; then
+	bind -x '"\t"':autocomplete 2> /dev/null
+    fi
     while true; do
         ask_user_for_input
         eval_javascript_in_looking_glass "$input_buffer"
