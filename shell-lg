@@ -104,6 +104,11 @@ clear_prompt() {
     tput el
 }
 
+clear_screen() {
+    clear
+    ask_user_for_input
+}
+
 ask_user_for_input() {
     # Save cursor position
     tput sc
@@ -205,6 +210,7 @@ autocomplete() {
 
 main_loop() {
     bind -x '"\t"':autocomplete 2> /dev/null
+    bind -x '"\f"':clear_screen 2> /dev/null
     while true; do
         ask_user_for_input
         eval_javascript_in_looking_glass "$input_buffer"
