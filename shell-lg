@@ -208,7 +208,42 @@ autocomplete() {
     fi
 }
 
+eval_inspect() {
+    it=$(eval_javascript_in_gnome_shell 'Main.lookingGlass.getIt()')
+    eval_javascript_in_gnome_shell '
+        const AsyncFunction = async function () {}.constructor;
+
+        delete Main.lookingGlass._lastInspection;
+        const command = `
+            const Main = await import("resource:///org/gnome/shell/ui/main.js");
+            const LookingGlass = await import("resource:///org/gnome/shell/ui/lookingGlass.js");
+
+            Main.lookingGlass._inspector = new LookingGlass.Inspector(this);
+            const inspector = Main.lookingGlass._inspector;
+            const id = inspector.connect("target", (i, obj, stageX, stageY) => {
+                const command = "inspect(" + Math.round(stageX) + ", " + Math.round(stageY) + ")";
+                Main.lookingGlass._lastInspection = command;
+                delete Main.lookingGlass._inspector;
+            });
+        `;
+        AsyncFunction(command)();
+    '
+
+    while sleep .250; do
+        last_inspection=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastInspection')
+
+        [ -n "$last_inspection" ] && break
+    done
+
+    until [ "$(eval_javascript_in_gnome_shell 'Main.lookingGlass.getIt()')" != "$it" ]; do
+        sleep .250
+    done
+
+    eval_javascript_in_looking_glass "$last_inspection"
+}
+
 main_loop() {
+    bind -x '"\a"':eval_inspect 2> /dev/null
     bind -x '"\t"':autocomplete 2> /dev/null
     bind -x '"\f"':clear_screen 2> /dev/null
     while true; do
