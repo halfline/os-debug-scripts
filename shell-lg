@@ -28,6 +28,7 @@ init_terminal() {
 }
 
 restore_terminal() {
+    clear_status
     clear_prompt
 
     tput csr 0 "$(tput lines)"
@@ -104,6 +105,22 @@ clear_prompt() {
     tput el
 }
 
+jump_to_status() {
+    # Move to just below the prompt
+    tput cup $(($(tput lines) - PROMPT_LINES + 1)) 0
+}
+
+clear_status() {
+    jump_to_status
+    tput el
+}
+
+print_status_line() {
+    jump_to_status
+    echo -ne "Type quit to exit, ^G to inspect, ^L to clear screen"
+    tput rc
+}
+
 clear_screen() {
     clear
     ask_user_for_input
@@ -134,10 +151,7 @@ ask_user_for_input() {
 }
 
 quit_message() {
-    # Move to just below the prompt
-    tput cup $(($(tput lines) - PROMPT_LINES + 1)) 0
-
-    echo -ne "Type quit to exit"
+    print_status_line
     ask_user_for_input
 }
 
@@ -208,7 +222,39 @@ autocomplete() {
     fi
 }
 
+inspect() {
+    eval_javascript_in_gnome_shell '
+        const AsyncFunction = async function () {}.constructor;
+
+        delete Main.lookingGlass._lastInspection;
+        const command = `
+            const Main = await import("resource:///org/gnome/shell/ui/main.js");
+            const LookingGlass = await import("resource:///org/gnome/shell/ui/lookingGlass.js");
+
+            Main.lookingGlass._inspector = new LookingGlass.Inspector(Main.lookingGlass);
+            const inspector = Main.lookingGlass._inspector;
+            const id = inspector.connect("target", (i, obj, stageX, stageY) => {
+                const command = "inspect(" + Math.round(stageX) + ", " + Math.round(stageY) + ")";
+                Main.lookingGlass._lastInspection = command;
+                delete Main.lookingGlass._inspector;
+            });
+        `;
+        AsyncFunction(command)();
+    '
+
+    while sleep .250; do
+        last_inspection=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastInspection' | jq -r)
+
+        [ -n "$last_inspection" ] && break
+    done
+
+    tput rc
+    eval_javascript_in_looking_glass "$last_inspection"
+    ask_user_for_input
+}
+
 main_loop() {
+    bind -x '"\a"':inspect 2> /dev/null
     bind -x '"\t"':autocomplete 2> /dev/null
     bind -x '"\f"':clear_screen 2> /dev/null
     while true; do
@@ -224,5 +270,6 @@ trap restore_terminal EXIT
 
 init_terminal
 load_history
+print_status_line
 main_loop
 restore_terminal
