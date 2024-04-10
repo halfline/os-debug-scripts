@@ -217,7 +217,7 @@ autocomplete() {
     else
         tput rc
         echo
-        echo "$COMPLETIONS" | columns
+        echo "$COMPLETIONS" | pr -T -2 -o 4
         ask_user_for_input
     fi
 }
