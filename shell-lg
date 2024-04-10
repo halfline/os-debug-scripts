@@ -156,9 +156,10 @@ quit_message() {
 }
 
 load_history() {
+
     while IFS= read -r line; do
         history -s "$line"
-    done < <(eval_javascript_in_gnome_shell 'Main.lookingGlass._history._history.join("\n");' | jq -r '. | select(. != null and . != "") | try fromjson catch .')
+    done < <(eval_javascript_in_gnome_shell 'Main.lookingGlass._history._history.join("\n");' | jq -r '. | select(. != null and . != "") | tostring')
 }
 
 check_for_unsafe_mode() {
