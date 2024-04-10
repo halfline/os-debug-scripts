@@ -233,9 +233,12 @@ inspect() {
 
             Main.lookingGlass._inspector = new LookingGlass.Inspector(Main.lookingGlass);
             const inspector = Main.lookingGlass._inspector;
-            const id = inspector.connect("target", (i, obj, stageX, stageY) => {
-                const command = "inspect(" + Math.round(stageX) + ", " + Math.round(stageY) + ")";
+
+            inspector.connectObject("target", (i, obj, stageX, stageY) => {
+                let command = "inspect(" + Math.round(stageX) + ", " + Math.round(stageY) + ")";
                 Main.lookingGlass._lastInspection = command;
+            },
+            "closed", () => {
                 delete Main.lookingGlass._inspector;
             });
         `;
@@ -243,13 +246,17 @@ inspect() {
     '
 
     while sleep .250; do
+        finished=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._inspector? false : true')
         last_inspection=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastInspection' | jq -r)
 
+        [ "$finished" = "true" ] && break
         [ -n "$last_inspection" ] && break
     done
 
     tput rc
-    eval_javascript_in_looking_glass "$last_inspection"
+    [ -n "$last_inspection" ] && eval_javascript_in_looking_glass "$last_inspection"
+    eval_javascript_in_gnome_shell 'delete Main.lookingGlass._lastInspection; Main.lookingGlass.setBorderPaintTarget(null);' > /dev/null
+
     ask_user_for_input
 }
 
