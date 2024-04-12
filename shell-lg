@@ -15,7 +15,7 @@ init_terminal() {
     done
 
     # Move cursor to the top of the room we just made
-    tput cuu $PROMPT_LINES
+    tput cuu $((PROMPT_LINES + 1))
 
     # Save cursor position
     tput sc
