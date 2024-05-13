@@ -2,19 +2,19 @@
 
 DAYS=${1:-7}
 
-now_timestamp=$(date +%s)
-start_timestamp=$(($now_timestamp - $DAYS * 24 * 60 * 60))
+OBJECT_DIR=".git/objects"
 
+recent_objects=$(find $OBJECT_DIR -type f -mtime -$DAYS)
 get_commits_in_range() {
-    git reflog --date=unix | while read -r line; do
-        timestamp=$(echo "$line" | sed -n 's/.*HEAD@{\([0-9]*\)}.*/\1/p')
-        commit=$(echo "$line" | sed -n 's/^\([0-9a-f]*\) .*/\1/p')
-        if [ "$timestamp" -ge "$start_timestamp" ]; then
-            echo "$commit"
+    for obj_path in $recent_objects; do
+        obj_hash=$(echo $obj_path | sed -e 's@.*objects/@@' -e 's@/@@')
+        object_type=$(git cat-file -t $obj_hash 2> /dev/null)
+        if [ "$object_type" = "commit" ]; then
+            echo $obj_hash
         fi
     done
 }
 
-COMMITS=$(get_commits_in_range | uniq)
-
+COMMITS=$(get_commits_in_range)
 echo "$COMMITS"
+
