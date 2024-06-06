@@ -16,13 +16,20 @@ class MyApplication(Gtk.Application):
         self.main_window.set_default_size(300, 200)
         self.main_window.show_all()
 
-        GLib.timeout_add_seconds(10, self.show_transient_window)
-
-    def show_transient_window(self):
         self.transient_window = Gtk.Window(transient_for=self.main_window, modal=True)
         self.transient_window.set_title("Transient Window")
         self.transient_window.set_default_size(200, 150)
         self.transient_window.show_all()
+        GLib.timeout_add_seconds(2, self.hide_transient_window)
+
+        GLib.timeout_add_seconds(10, self.show_transient_window)
+
+    def hide_transient_window(self):
+        self.transient_window.hide()
+        return False
+
+    def show_transient_window(self):
+        self.transient_window.present()
         return False
 
 app = MyApplication()
