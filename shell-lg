@@ -58,7 +58,7 @@ eval_javascript_in_gnome_shell() {
 
 eval_javascript_in_looking_glass() {
     # encode the text so we can side-step complicated escaping rules
-    ENCODED_TEXT=$(echo -n "$1" | xxd -p -c 9999999)
+    ENCODED_TEXT=$(echo -n "$1" | hexdump -v -e '/1 "%02x"')
 
     eval_javascript_in_gnome_shell "
         const GLib = imports.gi.GLib;
@@ -82,7 +82,7 @@ eval_javascript_in_looking_glass() {
 
     sleep .250
 
-    OUTPUT=$(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastEncodedResult;' | xxd -r -p)
+    OUTPUT=$(echo -e $(eval_javascript_in_gnome_shell 'Main.lookingGlass._lastEncodedResult;' | sed 's/\([[:xdigit:]][[:xdigit:]]\)/\\x\1/g'))
 
     if [ -z "$OUTPUT" ]; then
         echo -e "\e[31mCould not fetch result from call\e[0m" > /dev/stderr
@@ -172,7 +172,7 @@ check_for_unsafe_mode() {
 }
 
 eval_autocomplete_javascript() {
-    ENCODED_TEXT=$(echo -n "$1" | xxd -p -c 9999999)
+    ENCODED_TEXT=$(echo -n "$1" | hexdump -v -e '/1 "%02x"')
     OUTPUT=$(eval_javascript_in_gnome_shell '
         const AsyncFunction = async function () {}.constructor;
 
