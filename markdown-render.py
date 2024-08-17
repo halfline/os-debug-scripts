@@ -64,11 +64,13 @@ class MarkdownRenderer(mistune.HTMLRenderer):
             table_of_contents.append(f"{indent}- {heading['text']}")
         return '\n'.join(table_of_contents)
 
-    def link(self, text, url, title):
+    def link(self, url, text, title):
         if self.strip_links:
             return text
+        elif title:
+            return f"[{text}]({url} \"{title}\")"
         else:
-            return f"{text} <{url}>"
+            return f"[{text}]({url})"
 
     def list(self, body, ordered, level, start):
         indent = '  ' * (level - 1)
