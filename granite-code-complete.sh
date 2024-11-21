@@ -2,6 +2,7 @@
 
 prefix="$1"
 suffix="$2"
+language="$3"
 input=$(mktemp)
 cat > "$input" << EOF
 /set parameter temperature 0
@@ -49,12 +50,12 @@ int sum(int a, int b) {
 What is the expected completion for this code:
 
 Prefix:
-\`\`\`c
+\`\`\`$language
 $prefix
 \`\`\`
 
 Suffix:
-\`\`\`c
+\`\`\`$language
 $suffix
 \`\`\`
 
@@ -68,7 +69,7 @@ output=$(mktemp)
 sed "s/CONTEXT_WINDOW_SIZE/$NUM_TOKENS/" "$input" | ollama run granite3-dense:8b > "$output"
 
 code=$(cat "$output")
-code=${code#"\`\`\`c"}
+code=${code#"\`\`\`$language"}
 code=${code%"\`\`\`"}
 code=${code#"$prefix"}
 code=${code%"$suffix"}
