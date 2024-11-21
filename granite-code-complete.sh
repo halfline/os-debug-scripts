@@ -44,13 +44,6 @@ int sum(int a, int b) {
     return a + b;
 }
 \`\`\`
-
-Before giving your answer, double check that the output conforms to these guidelines:
- - Provide the fully completed code, including the prefix, completed section and suffix in the output
- - Generate code that matches the overall style of the prefix and suffix.
- - Do not explain the completion, just give the raw results.
- - If multiple solutions are plausible, choose the simplest and most commonly accepted approach.
- - Do not assume functions are available unless they have been mentioned or are part of standard libraries.
 """
 
 What is the expected completion for this code:
