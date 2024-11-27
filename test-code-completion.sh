@@ -103,7 +103,7 @@ test_case() {
 # Test Case 0
 test_case "// Test Case 0: Convert numeral byte to integer
 int to_integer(unsigned char numeral) {
-    return (int) numeral - '0" " - '" ";
+    return (int) numeral - '0" "'" ";
 }"
 
 # Test Case 1
