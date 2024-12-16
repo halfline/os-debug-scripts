@@ -229,11 +229,13 @@ for ((i=0; i< num_tests; i++)); do
 
     echo "Prefix:"
     echo "$prefix"
-    echo -e "\nExpected Output:"
-    echo "$expected"
     echo -e "\nSuffix:"
     echo "$suffix"
+    echo -e "\nExpected Output:"
+    echo "$expected"
     echo -e "\nActual Output:"
+    echo "$output"
+    echo -e "\nComplete Result:"
     echo -ne '\e[1;32m'
     echo -ne "$prefix"
     echo -ne '\e[1;31m'
