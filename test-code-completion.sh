@@ -13,8 +13,7 @@ complete_code() {
 	/clear
 	/set parameter seed 0
 	/set parameter temperature 0
-	/set parameter top_k 40
-	/set parameter top_p .1
+	/set parameter num_ctx $(ollama show "$MODEL" | grep context | awk '{ print $3 }')
 	/set nohistory
 	/set system """
 	You are a code assistant that completes missing code snippets.
@@ -29,7 +28,7 @@ complete_code() {
 	- Do **not** include any parts of the existing code ([PREFIX] or [SUFFIX]) in your output.
 	- Do **not** include any punctuation or keywords that are already present in the surrounding code.
 	- Provide **only** the missing code, without any explanations or additional text.
-        - This completion will be injected directly into an IDE editor buffer, so exclude code fences from output
+	- This completion will be injected directly into an IDE editor buffer, so exclude code fences from output
 	- Maintain the appropriate indentation level.
 
 	**Examples:**
