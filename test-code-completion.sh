@@ -39,7 +39,7 @@ complete_code() {
 	**Input Code:**
 
 	int integer_to_char(int a) {
-	    return |missing code here| + '0';
+	    return |missing code here| + 0x30;
 	}
 
 	**Correct Output:**
@@ -101,10 +101,10 @@ test_case() {
 }
 
 # Test Case 0
-test_case "// Test Case 0: Convert numeral byte to integer
+test_case '// Test Case 0: Convert numeral byte to integer
 int to_integer(unsigned char numeral) {
-    return (int) numeral - '0" "'" ";
-}"
+    return (int) numeral - 0x' '30' ';
+}'
 
 # Test Case 1
 test_case '// Test Case 1: Simple addition function
