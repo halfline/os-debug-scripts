@@ -210,6 +210,18 @@ int find_max(int arr[], int n) {
     return max;
 }' 
 
+strip_fences() {
+    sed -E '
+        /^```[a-zA-Z0-9+ -]*$/d
+
+        /```$/d
+
+        /^`([^`]*)`$/{
+            s/^`([^`]*)`$/\1/
+        }
+    ' <<< "$1"
+}
+
 num_tests=$index
 
 for ((i=0; i< num_tests; i++)); do
@@ -223,6 +235,7 @@ for ((i=0; i< num_tests; i++)); do
     suffix=${test_cases[$suffix_var]}
     
     output=$(complete_code "$prefix" "$suffix")
+    stripped_output=$(strip_fences "$output")
 
     [ $? != 0 ] && exit
 
@@ -238,7 +251,7 @@ for ((i=0; i< num_tests; i++)); do
     echo -ne '\e[1;32m'
     echo -ne "$prefix"
     echo -ne '\e[1;31m'
-    echo -n "$output"
+    echo -n "$stripped_output"
     echo -ne '\e[1;33m'
     echo -n "$suffix"
     echo -ne '\e[1;0m'
